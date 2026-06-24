@@ -72,7 +72,7 @@ def get_target_transit(target_name: str, lat: float, lon: float) -> str:
 def build_orchestrator(provider: str, api_key: str, mount: str, optics: str, camera: str, lat: float, lon: float):
     # Route to the chosen provider and instantiate the correct LangChain wrapper
     if provider == "Google (Gemini 1.5 Flash)":
-        llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.2, google_api_key=api_key)
+        llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.2, google_api_key=api_key)
     elif provider == "Google (Gemini 2.5 Pro)":
         llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro", temperature=0.2, google_api_key=api_key)
     elif provider == "Anthropic (Claude 3.5 Sonnet)":
@@ -121,7 +121,7 @@ with st.sidebar:
     provider_choice = st.selectbox(
         "Select AI Provider", 
         [
-            "Google (Gemini 1.5 Flash)",
+            "Google (Gemini 2.5 Flash)",
             "Google (Gemini 2.5 Pro)", 
             "Anthropic (Claude 3.5 Sonnet)", 
             "OpenAI (ChatGPT / GPT-4o)", 
