@@ -46,6 +46,12 @@ This architecture is designed to be easily extensible. To add a new LLM provider
 3. **Expand the UI Dropdown:** Add the provider name to the `provider_choice` list inside the Streamlit sidebar configuration.
 4. **Update the Orchestrator Factory:** Add an `elif` block in the `build_orchestrator` function to map your new provider string to its respective LangChain instantiation logic.
 
+## 🌟 Example Use Cases
+
+* **The Narrowband Deep Dive:** "Plan a session for the Rosette Nebula using my ASI2600MC Pro. Give me the optimal gain setting and sub-exposure length to maximize faint detail while avoiding lunar interference."
+* **The Multi-Target Marathon:** "I have a clear window from 10 PM to 4 AM. Plan an itinerary that starts with the Orion Nebula and switches to the Horsehead Nebula when it reaches peak altitude."
+* **The Harmonic Drive Advantage:** "I'm using a ZWO AM5. When exactly should I execute the meridian flip for the Whirlpool Galaxy tonight to maximize continuous tracking time?"
+
 ## ⚠️ A Note on Frontier AI Evolution
 The libraries and models powering this application are in a state of rapid, constant evolution. 
 
