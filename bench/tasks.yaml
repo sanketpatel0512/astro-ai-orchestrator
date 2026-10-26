@@ -1,0 +1,307 @@
+# Routing benchmark task suite.
+#
+# Each task carries a reference trajectory expressed as a PARTIAL order, not a
+# fixed sequence. Some steps genuinely have to precede others (you cannot fetch
+# weather before you have coordinates); the rest are order-free, and scoring a
+# model wrong for choosing a different valid order would be measuring style
+# rather than correctness.
+#
+# Every prompt asks for exactly what required_tools covers, no more and no
+# less: a model that does what it was asked must be able to score complete.
+#
+# fields:
+#   required_tools  tools that must appear for the task to be complete
+#   dependencies    tool -> tools that must appear BEFORE it
+#   forbidden_tools tools that indicate the model misread the request
+#   param_checks    substring/number assertions on the arguments actually passed.
+#                   When geocode_location has a location check, the scorer also
+#                   checks every lat/lon argument against that city's coordinates.
+
+- id: T01
+  depth: 2
+  prompt: "What's the cloud cover looking like in Austin over the next 12 hours?"
+  required_tools: [geocode_location, get_weather_conditions]
+  dependencies: {get_weather_conditions: [geocode_location]}
+  forbidden_tools: [save_session_plan]
+  param_checks:
+    geocode_location: {location: austin}
+
+- id: T02
+  depth: 2
+  prompt: "When does full astronomical darkness start in Flagstaff on 2026-11-14?"
+  required_tools: [geocode_location, get_darkness_window]
+  dependencies: {get_darkness_window: [geocode_location]}
+  forbidden_tools: [save_session_plan]
+  param_checks:
+    geocode_location: {location: flagstaff}
+    get_darkness_window: {date: "2026-11-14"}
+
+- id: T03
+  depth: 2
+  prompt: "How high does the Ring Nebula get from Denver?"
+  required_tools: [geocode_location, get_target_transit]
+  dependencies: {get_target_transit: [geocode_location]}
+  forbidden_tools: [save_session_plan]
+  param_checks:
+    geocode_location: {location: denver}
+    get_target_transit: {target_name: ring}
+
+- id: T04
+  depth: 2
+  prompt: "Moon illumination on 2026-10-14, and what field of view do I get with a 600mm scope on an APS-C sensor?"
+  required_tools: [get_moon_phase, get_field_of_view]
+  dependencies: {}
+  forbidden_tools: [geocode_location, save_session_plan]
+  param_checks:
+    get_moon_phase: {date: "2026-10-14"}
+    get_field_of_view: {focal_length_mm: 600}
+
+- id: T05
+  depth: 2
+  prompt: "Cloud cover for Seattle tonight please."
+  required_tools: [geocode_location, get_weather_conditions]
+  dependencies: {get_weather_conditions: [geocode_location]}
+  forbidden_tools: [save_session_plan]
+  param_checks:
+    geocode_location: {location: seattle}
+
+- id: T06
+  depth: 3
+  prompt: "Can I shoot the Orion Nebula from Austin tonight? Check the cloud cover too."
+  required_tools: [geocode_location, get_weather_conditions, get_target_transit]
+  dependencies:
+    get_weather_conditions: [geocode_location]
+    get_target_transit: [geocode_location]
+  forbidden_tools: []
+  param_checks:
+    geocode_location: {location: austin}
+    get_target_transit: {target_name: orion}
+
+- id: T07
+  depth: 3
+  prompt: "In Denver on 2026-09-20, when does full darkness begin, and how bright will the moon be?"
+  required_tools: [geocode_location, get_darkness_window, get_moon_phase]
+  dependencies: {get_darkness_window: [geocode_location]}
+  forbidden_tools: [save_session_plan]
+  param_checks:
+    geocode_location: {location: denver}
+    get_moon_phase: {date: "2026-09-20"}
+    get_darkness_window: {date: "2026-09-20"}
+
+- id: T08
+  depth: 3
+  prompt: "From Princeton, how visible is Andromeda and what are the clouds doing?"
+  required_tools: [geocode_location, get_target_transit, get_weather_conditions]
+  dependencies:
+    get_target_transit: [geocode_location]
+    get_weather_conditions: [geocode_location]
+  forbidden_tools: [save_session_plan]
+  param_checks:
+    geocode_location: {location: princeton}
+    get_target_transit: {target_name: andromeda}
+
+- id: T09
+  depth: 3
+  prompt: "Framing check: the Pleiades at 400mm on APS-C, and how high do they get from Flagstaff?"
+  required_tools: [geocode_location, get_field_of_view, get_target_transit]
+  dependencies: {get_target_transit: [geocode_location]}
+  forbidden_tools: [get_moon_phase]
+  param_checks:
+    geocode_location: {location: flagstaff}
+    get_field_of_view: {focal_length_mm: 400}
+    get_target_transit: {target_name: pleiades}
+
+- id: T10
+  depth: 3
+  prompt: "Compare the darkness window and cloud cover between Flagstaff and Seattle on 2026-11-02."
+  required_tools: [geocode_location, get_darkness_window, get_weather_conditions]
+  dependencies:
+    get_darkness_window: [geocode_location]
+    get_weather_conditions: [geocode_location]
+  forbidden_tools: [save_session_plan]
+  param_checks:
+    get_darkness_window: {date: "2026-11-02"}
+
+- id: T11
+  depth: 4
+  prompt: "Is the Orion Nebula worth shooting from Austin on 2026-11-03? I need weather, target altitude and moon interference."
+  required_tools: [geocode_location, get_weather_conditions, get_target_transit, get_moon_phase]
+  dependencies:
+    get_weather_conditions: [geocode_location]
+    get_target_transit: [geocode_location]
+  forbidden_tools: []
+  param_checks:
+    geocode_location: {location: austin}
+    get_moon_phase: {date: "2026-11-03"}
+    get_target_transit: {target_name: orion}
+
+- id: T12
+  depth: 4
+  prompt: "Should I drive to Flagstaff for the Ring Nebula on 2026-09-28? Check the darkness window, weather and whether the target is high enough."
+  required_tools: [geocode_location, get_darkness_window, get_weather_conditions, get_target_transit]
+  dependencies:
+    get_darkness_window: [geocode_location]
+    get_weather_conditions: [geocode_location]
+    get_target_transit: [geocode_location]
+  forbidden_tools: []
+  param_checks:
+    geocode_location: {location: flagstaff}
+    get_target_transit: {target_name: ring}
+
+- id: T13
+  depth: 4
+  prompt: "From Princeton on 2026-10-02, is Andromeda worth imaging at 600mm on APS-C given the moon?"
+  required_tools: [geocode_location, get_target_transit, get_field_of_view, get_moon_phase]
+  dependencies: {get_target_transit: [geocode_location]}
+  forbidden_tools: []
+  param_checks:
+    geocode_location: {location: princeton}
+    get_moon_phase: {date: "2026-10-02"}
+    get_field_of_view: {focal_length_mm: 600}
+
+- id: T14
+  depth: 4
+  prompt: "Denver, 2026-12-11, Whirlpool Galaxy. Give me weather, altitude and the darkness window."
+  required_tools: [geocode_location, get_weather_conditions, get_target_transit, get_darkness_window]
+  dependencies:
+    get_weather_conditions: [geocode_location]
+    get_target_transit: [geocode_location]
+    get_darkness_window: [geocode_location]
+  forbidden_tools: []
+  param_checks:
+    geocode_location: {location: denver}
+
+- id: T15
+  depth: 4
+  prompt: "I want to image the Pleiades from Seattle on 2026-11-19. Check the weather and how high they get, then save me a session plan."
+  required_tools: [geocode_location, get_weather_conditions, get_target_transit, save_session_plan]
+  dependencies:
+    get_weather_conditions: [geocode_location]
+    get_target_transit: [geocode_location]
+    save_session_plan: [get_target_transit]
+  forbidden_tools: []
+  param_checks:
+    geocode_location: {location: seattle}
+    save_session_plan: {target_name: pleiades}
+
+- id: T16
+  depth: 5
+  prompt: "Full assessment for the Orion Nebula from Flagstaff on 2026-10-30: darkness window, weather, altitude, and then a session plan."
+  required_tools: [geocode_location, get_darkness_window, get_weather_conditions, get_target_transit, save_session_plan]
+  dependencies:
+    get_darkness_window: [geocode_location]
+    get_weather_conditions: [geocode_location]
+    get_target_transit: [geocode_location]
+    save_session_plan: [get_target_transit, get_weather_conditions]
+  forbidden_tools: []
+  param_checks:
+    geocode_location: {location: flagstaff}
+    save_session_plan: {target_name: orion}
+
+- id: T17
+  depth: 5
+  prompt: "Austin, 2026-09-15, Andromeda at 400mm APS-C. Weather, altitude, moon, framing — then tell me whether to bother."
+  required_tools: [geocode_location, get_weather_conditions, get_target_transit, get_moon_phase, get_field_of_view]
+  dependencies:
+    get_weather_conditions: [geocode_location]
+    get_target_transit: [geocode_location]
+  forbidden_tools: [save_session_plan]
+  param_checks:
+    geocode_location: {location: austin}
+    get_moon_phase: {date: "2026-09-15"}
+    get_field_of_view: {focal_length_mm: 400}
+
+- id: T18
+  depth: 5
+  prompt: "Princeton on 2026-11-08 for the Ring Nebula. I need the darkness window, moon and weather checked, then a plan."
+  required_tools: [geocode_location, get_darkness_window, get_moon_phase, get_weather_conditions, save_session_plan]
+  dependencies:
+    get_darkness_window: [geocode_location]
+    get_weather_conditions: [geocode_location]
+    save_session_plan: [get_weather_conditions, get_moon_phase]
+  forbidden_tools: []
+  param_checks:
+    geocode_location: {location: princeton}
+    get_moon_phase: {date: "2026-11-08"}
+
+- id: T19
+  depth: 5
+  prompt: "Denver 2026-10-21, Whirlpool at 600mm APS-C: check altitude, framing, moon and weather. No plan needed."
+  required_tools: [geocode_location, get_target_transit, get_field_of_view, get_moon_phase, get_weather_conditions]
+  dependencies:
+    get_target_transit: [geocode_location]
+    get_weather_conditions: [geocode_location]
+  forbidden_tools: [save_session_plan]
+  param_checks:
+    geocode_location: {location: denver}
+    get_field_of_view: {focal_length_mm: 600}
+
+- id: T20
+  depth: 5
+  prompt: "Seattle, Pleiades, 2026-12-05. Darkness window, weather, altitude — then a plan if it's viable."
+  required_tools: [geocode_location, get_darkness_window, get_weather_conditions, get_target_transit, save_session_plan]
+  dependencies:
+    get_darkness_window: [geocode_location]
+    get_weather_conditions: [geocode_location]
+    get_target_transit: [geocode_location]
+    save_session_plan: [get_target_transit]
+  forbidden_tools: []
+  param_checks:
+    geocode_location: {location: seattle}
+
+- id: T21
+  depth: 6
+  prompt: "Complete workup: Orion Nebula from Denver on 2026-11-26. Darkness window, weather, altitude, moon, then a session plan."
+  required_tools: [geocode_location, get_darkness_window, get_weather_conditions, get_target_transit, get_moon_phase, save_session_plan]
+  dependencies:
+    get_darkness_window: [geocode_location]
+    get_weather_conditions: [geocode_location]
+    get_target_transit: [geocode_location]
+    save_session_plan: [get_target_transit, get_weather_conditions, get_moon_phase]
+  forbidden_tools: []
+  param_checks:
+    geocode_location: {location: denver}
+    get_moon_phase: {date: "2026-11-26"}
+    save_session_plan: {target_name: orion}
+
+- id: T22
+  depth: 6
+  prompt: "Everything for Andromeda from Flagstaff on 2026-09-09, 400mm APS-C: darkness window, cloud, altitude, field of view, and a final plan."
+  required_tools: [geocode_location, get_darkness_window, get_weather_conditions, get_target_transit, get_field_of_view, save_session_plan]
+  dependencies:
+    get_darkness_window: [geocode_location]
+    get_weather_conditions: [geocode_location]
+    get_target_transit: [geocode_location]
+    save_session_plan: [get_target_transit, get_weather_conditions]
+  forbidden_tools: []
+  param_checks:
+    geocode_location: {location: flagstaff}
+    get_field_of_view: {focal_length_mm: 400}
+
+- id: T23
+  depth: 6
+  prompt: "Austin, 2026-12-18, Ring Nebula. Check the darkness window, weather, altitude and moon, then plan the session."
+  required_tools: [geocode_location, get_darkness_window, get_weather_conditions, get_target_transit, get_moon_phase, save_session_plan]
+  dependencies:
+    get_darkness_window: [geocode_location]
+    get_weather_conditions: [geocode_location]
+    get_target_transit: [geocode_location]
+    save_session_plan: [get_target_transit, get_moon_phase]
+  forbidden_tools: []
+  param_checks:
+    geocode_location: {location: austin}
+    get_moon_phase: {date: "2026-12-18"}
+
+- id: T24
+  depth: 6
+  prompt: "Princeton, Pleiades, 2026-10-07, 400mm on APS-C. I want weather, altitude, moon phase and framing checked before you give me a plan."
+  required_tools: [geocode_location, get_weather_conditions, get_target_transit, get_moon_phase, get_field_of_view, save_session_plan]
+  dependencies:
+    get_weather_conditions: [geocode_location]
+    get_target_transit: [geocode_location]
+    save_session_plan: [get_target_transit, get_weather_conditions, get_moon_phase]
+  forbidden_tools: []
+  param_checks:
+    geocode_location: {location: princeton}
+    get_field_of_view: {focal_length_mm: 400}
+    get_moon_phase: {date: "2026-10-07"}

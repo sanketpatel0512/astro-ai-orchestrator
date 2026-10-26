@@ -9,15 +9,21 @@ By synthesizing real-time meteorological data with complex celestial ephemeris, 
 ## ✨ Features
 * **Agnostic Model Routing:** Instantly switch between frontier AI providers to benchmark tool-use and reasoning capabilities on identical tasks.
 * **📍 Location-Aware Routing:** Input exact geographic coordinates (Latitude/Longitude) to generate highly localized weather forecasts and precise celestial transit times, completely decoupled from static IP locations.
-* **Dynamic Tool Use:**
-    * 🌤️ `get_weather_conditions(lat, lon)`: Queries the Open-Meteo API for exact hour-by-hour cloud cover and atmospheric seeing conditions at the specified coordinates.
-    * 🪐 `get_target_transit(target, lat, lon)`: Utilizes `astropy` to calculate localized target altitudes, transit times, and visibility windows relative to the custom observatory location.
+* **Dynamic Tool Use** (defined in [`astro_tools.py`](astro_tools.py), shared with the benchmark):
+    * 📍 `geocode_location(location)`: Resolves a place name to coordinates and timezone via the Open-Meteo geocoding API.
+    * 🌤️ `get_weather_conditions(lat, lon, date)`: Queries the Open-Meteo API for hour-by-hour cloud cover at the specified coordinates, tonight or for a date up to ~16 days ahead.
+    * 🪐 `get_target_transit(target, lat, lon, date)`: Utilizes `astropy` to calculate localized target altitudes, transit times, and visibility windows relative to the custom observatory location.
+    * 🌙 `get_moon_phase(date)`: Moon illumination and waxing/waning, computed with `astropy`.
+    * 🌌 `get_darkness_window(lat, lon, date)`: Start and end of astronomical darkness (sun below −18°).
+    * 🖼️ `get_field_of_view(focal_length_mm, sensor)`: Field of view and, for known ZWO cameras, pixel scale.
+    * 📝 `save_session_plan(target, start, end, notes)`: Records the final plan.
+* **📊 Routing Benchmark:** [`bench/`](bench/README.md) measures whether each model calls the right tool, in the right order, with the right arguments, across 24 tasks of 2–6 chained calls, and reports where chains break.
 * **🔭 Hardware-Aware Reasoning:** Injects custom hardware context (e.g., ZWO AM5 mount, Apertura optics, ASI2600MC Pro sensors) into the agent state, allowing models to deduce specific meridian flip timings, sub-exposure lengths, and sensor gain settings.
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-* Python 3.9+
+* Python 3.10+
 * API Keys for the models you wish to test (Anthropic, Google GenAI, OpenAI, Groq).
 
 ### Installation
@@ -37,6 +43,15 @@ pip install streamlit langgraph langchain langchain-anthropic langchain-google-g
 streamlit run app.py
 ```
 *(Note for Windows users: If the Streamlit server hangs on startup, you can run it in headless mode via `python -m streamlit run app.py --server.headless true --browser.gatherUsageStats false`)*
+
+4. Benchmark tool routing across models (see [`bench/README.md`](bench/README.md)); the first command is free and verifies the pipeline:
+```bash
+cd bench
+pip install -r requirements.txt
+python harness.py --models mock_perfect,mock_degrading,mock_spurious,mock_order --trials 1
+python score.py
+python report.py
+```
 
 ## 🛠️ Adding Additional Models
 This architecture is designed to be easily extensible. To add a new LLM provider (e.g., Cohere, Mistral):
