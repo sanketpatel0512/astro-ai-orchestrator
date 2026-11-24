@@ -1,0 +1,71 @@
+{
+  "_about": "Before = first live run (2026-11-24 11:44), scored by the original scorer at commit aaa007f. After = full rerun (2026-11-24 13:11) on fixture v2, scored at 0dfa38a. Generated from each results.json.",
+  "before": {
+    "claude": {
+      "runs": 72,
+      "completion": 0.9444,
+      "precision": 0.9173,
+      "by_depth": {
+        "2": 1.0,
+        "3": 1.0,
+        "4": 1.0,
+        "5": 0.8,
+        "6": 0.9167
+      },
+      "failed_runs": 4,
+      "runs_flagged_extra_call": 29,
+      "provider_errors": 0,
+      "mean_latency_s": 10.8
+    },
+    "gemini": {
+      "runs": 72,
+      "completion": 0.9583,
+      "precision": 0.9131,
+      "by_depth": {
+        "2": 1.0,
+        "3": 1.0,
+        "4": 1.0,
+        "5": 0.8,
+        "6": 1.0
+      },
+      "failed_runs": 3,
+      "runs_flagged_extra_call": 33,
+      "provider_errors": 0,
+      "mean_latency_s": 15.97
+    }
+  },
+  "after": {
+    "claude": {
+      "runs": 72,
+      "completion": 1.0,
+      "precision": 1.0,
+      "by_depth": {
+        "2": 1.0,
+        "3": 1.0,
+        "4": 1.0,
+        "5": 1.0,
+        "6": 1.0
+      },
+      "failed_runs": 0,
+      "runs_flagged_extra_call": 0,
+      "provider_errors": 0,
+      "mean_latency_s": 9.83
+    },
+    "gemini": {
+      "runs": 72,
+      "completion": 1.0,
+      "precision": 0.9931,
+      "by_depth": {
+        "2": 1.0,
+        "3": 1.0,
+        "4": 1.0,
+        "5": 1.0,
+        "6": 1.0
+      },
+      "failed_runs": 0,
+      "runs_flagged_extra_call": 3,
+      "provider_errors": 0,
+      "mean_latency_s": 14.96
+    }
+  }
+}

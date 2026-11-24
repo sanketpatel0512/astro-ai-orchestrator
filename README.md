@@ -1,10 +1,10 @@
 # 🔭 AstroAI Multi-Model Orchestrator
 
-An enterprise-grade, multi-agent benchmarking framework designed to autonomously orchestrate astrophotography session planning. 
+An astrophotography session planner built around a tool-using AI agent, plus a benchmark that measures how well different models drive that agent.
 
-Built with **Streamlit** and **LangGraph**, this application demonstrates complex LLM tool-use, stateful agentic routing, and dynamic hardware-aware reasoning across multiple frontier models (Google Gemini, Anthropic Claude, OpenAI, and Groq). 
+You describe a night out: a place, a date, a target and your gear. The agent calls seven tools to check the cloud forecast, the darkness window, the target's altitude, moon interference and your field of view, then saves a session plan. It's built with **Streamlit** and **LangChain**, and the model behind the agent can be Claude, Gemini, GPT or Llama (via Groq).
 
-By synthesizing real-time meteorological data with complex celestial ephemeris, the orchestrator generates optimized, location-specific imaging itineraries—factoring in local observatory coordinates, mount capabilities (e.g., harmonic drive meridian tracking), optical focal lengths, and camera sensor characteristics.
+The [routing benchmark](bench/README.md) runs the same 24 planning tasks (2–6 tool calls each) through each model against fixed test data. It grades every step: which tools were called, in what order, and with what arguments. **Latest result** ([RESULTS.md](bench/RESULTS.md)): Claude Sonnet 5.5 and Gemini 3.8 Flash both completed all 72 of their runs. The first run's failures all turned out to be bugs in the benchmark itself, which [bench/README.md](bench/README.md) describes.
 
 ## ✨ Features
 * **Agnostic Model Routing:** Instantly switch between frontier AI providers to benchmark tool-use and reasoning capabilities on identical tasks.
@@ -29,7 +29,7 @@ By synthesizing real-time meteorological data with complex celestial ephemeris, 
 ### Installation
 1. Clone this repository:
 ```bash
-git clone [https://github.com/yourusername/astro-ai-orchestrator.git](https://github.com/yourusername/astro-ai-orchestrator.git)
+git clone https://github.com/sanketpatel0512/astro-ai-orchestrator.git
 cd astro-ai-orchestrator
 ```
 

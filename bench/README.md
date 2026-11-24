@@ -171,6 +171,17 @@ reproducing it, the scorer is wrong.
 - **Change the rubric**: edit `score.py`, re-run it over existing `runs/` files,
   then re-run the mocks and confirm the table above still reproduces.
 
+## Before and after the benchmark fixes
+
+![Before and after fixing the benchmark](before_after.png)
+
+The first live run (2026-11-24) scored Claude Sonnet 5.5 at 94% and Gemini 3.8
+Flash at 96%, with both dropping to 80% on five-tool tasks. Reading the
+trajectories showed every failure was a bug in the benchmark, not the models.
+The image compares that run with the full rerun after the fixes.
+`before_after.json` holds both summaries and records which scorer produced
+each. Rebuild the image with `python before_after.py`.
+
 ## Reporting honestly
 
 The suite is one domain, one phrasing per task, and a small sample. That is
