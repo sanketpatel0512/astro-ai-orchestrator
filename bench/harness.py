@@ -5,15 +5,22 @@ Run the routing benchmark and write raw trajectories to runs.jsonl.
     python harness.py --models claude,gemini,openai,groq --trials 3
 
 Each invocation writes a new file under runs/ and never overwrites an existing
-one: raw trajectories are the expensive asset. Nothing is scored here. This file's only job is to produce an honest record of
-what each model did, so that scoring can be re-run or re-defined later without
-paying for the API calls again.
+one: raw trajectories are the expensive asset. Nothing is scored here. This
+file's only job is to produce an honest record of what each model did, so that
+scoring can be re-run or re-defined later without paying for the API calls
+again.
+
+Transient provider failures (rate limits, overload, dropped connections) are
+retried with backoff rather than recorded as a failed task: an outage at the
+provider says nothing about the model's routing. Retry waits are excluded from
+elapsed_s.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import time
 from datetime import datetime
 from pathlib import Path
@@ -25,6 +32,24 @@ import tools as toolmod
 
 HERE = Path(__file__).parent
 MAX_STEPS = 12
+RETRY_WAITS_S = (5, 15, 45)
+
+# Matched against "ExceptionName: message". Provider SDKs disagree on exception
+# classes, so status codes and phrases are matched as well as names.
+TRANSIENT = re.compile(
+    r"Connection|Timeout|RateLimit|Overloaded|InternalServer|ServiceUnavailable|"
+    r"ResourceExhausted|ServerError|\b(429|500|502|503|504|529)\b|UNAVAILABLE|"
+    r"RESOURCE_EXHAUSTED|high demand|try again later",
+    re.IGNORECASE,
+)
+
+# A quota measured per day won't recover within the retry window, and every
+# remaining task for that model would fail the same way.
+DAILY_QUOTA = re.compile(r"per ?day|PerDay|retry in \d+h", re.IGNORECASE)
+
+
+class QuotaExhausted(Exception):
+    """Stop running this model; its remaining runs would only record the quota."""
 
 SYSTEM = (
     "You are an astrophotography session planning assistant. Use the tools "
@@ -118,11 +143,29 @@ def run_live(model, task: dict) -> dict:
     error = None
     final_text = ""
     answered = False
+    retries = 0
+    retry_wait_s = 0.0
+
+    def invoke():
+        nonlocal retries, retry_wait_s
+        for wait in (*RETRY_WAITS_S, None):
+            try:
+                return bound.invoke(messages)
+            except Exception as exc:  # noqa: BLE001
+                text = f"{type(exc).__name__}: {exc}"
+                if DAILY_QUOTA.search(text):
+                    raise QuotaExhausted(text) from exc
+                if wait is None or not TRANSIENT.search(text):
+                    raise
+                print(f"    {task['id']}: {type(exc).__name__}, retrying in {wait}s")
+                time.sleep(wait)
+                retries += 1
+                retry_wait_s += wait
 
     try:
         while steps < MAX_STEPS:
             steps += 1
-            reply = bound.invoke(messages)
+            reply = invoke()
             messages.append(reply)
             calls = getattr(reply, "tool_calls", None) or []
             if not calls:
@@ -142,11 +185,14 @@ def run_live(model, task: dict) -> dict:
                 messages.append(
                     ToolMessage(content=str(result), tool_call_id=call["id"])
                 )
+    except QuotaExhausted:
+        raise
     except Exception as exc:  # noqa: BLE001 - a provider failure is a data point
         error = f"{type(exc).__name__}: {exc}"
 
     return {"calls": toolmod.drain_log(), "steps": steps,
             "hit_step_cap": not answered and error is None,
+            "retries": retries, "retry_wait_s": retry_wait_s,
             "error": error, "final_text": final_text}
 
 
@@ -204,23 +250,29 @@ def main() -> None:
             is_mock = getattr(model, "is_mock", False)
             print(f"running {name} — {len(tasks)} tasks x {args.trials} trials")
 
-            for task in tasks:
-                for trial in range(args.trials):
-                    started = time.time()
-                    result = (run_mock(model, task) if is_mock
-                              else run_live(model, task))
-                    record = {
-                        "model": name,
-                        "task_id": task["id"],
-                        "depth": task["depth"],
-                        "trial": trial,
-                        "elapsed_s": round(time.time() - started, 2),
-                        **result,
-                    }
-                    fh.write(json.dumps(record) + "\n")
-                    written += 1
-                    if result["error"]:
-                        print(f"  {task['id']} t{trial}: {result['error']}")
+            try:
+                for task in tasks:
+                    for trial in range(args.trials):
+                        started = time.time()
+                        result = (run_mock(model, task) if is_mock
+                                  else run_live(model, task))
+                        record = {
+                            "model": name,
+                            "task_id": task["id"],
+                            "depth": task["depth"],
+                            "trial": trial,
+                            "elapsed_s": round(time.time() - started
+                                               - result.get("retry_wait_s", 0), 2),
+                            **result,
+                        }
+                        fh.write(json.dumps(record) + "\n")
+                        written += 1
+                        if result["error"]:
+                            print(f"  {task['id']} t{trial}: {result['error']}")
+            except QuotaExhausted as exc:
+                print(f"stopping {name} at {task['id']} t{trial}: daily quota "
+                      f"exhausted, so its remaining runs were not recorded. "
+                      f"Rerun it once the quota resets.\n  {str(exc)[:200]}")
 
     print(f"wrote {written} runs to {out_path}")
 

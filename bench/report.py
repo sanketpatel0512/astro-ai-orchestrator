@@ -169,7 +169,8 @@ def main() -> None:
 </picture>
 
 **Method.** {n_tasks} astrophotography planning tasks requiring 2–6 tool calls
-each, run across {len(summary)} models at temperature 0, {n_runs} runs total.
+each, run across {len(summary)} models at temperature 0 where the provider
+allows it (Claude 5 models run at their default), {n_runs} runs total.
 Tools return deterministic fixtures rather than live API responses, so the thing
 measured is routing rather than third-party uptime. A task counts as complete
 only if every required tool was called, dependency order was respected, every

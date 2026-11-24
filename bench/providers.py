@@ -22,13 +22,15 @@ REAL_MODELS: dict[str, dict[str, Any]] = {
     "gemini": {
         "module": "langchain_google_genai",
         "cls": "ChatGoogleGenerativeAI",
-        "kwargs": {"model": "gemini-2.5-pro", "temperature": 0},
+        "kwargs": {"model": "gemini-3.8-flash", "temperature": 0},
         "env": "GOOGLE_API_KEY",
     },
     "claude": {
         "module": "langchain_anthropic",
         "cls": "ChatAnthropic",
-        "kwargs": {"model": "claude-sonnet-5-5", "temperature": 0},
+        # Claude 5 models reject non-default temperature, so this runs at the
+        # provider default; trials capture the resulting variance.
+        "kwargs": {"model": "claude-sonnet-5-5"},
         "env": "ANTHROPIC_API_KEY",
     },
     "openai": {
@@ -49,9 +51,17 @@ REAL_MODELS: dict[str, dict[str, Any]] = {
 def load_real(name: str):
     """Instantiate a provider. Raises with a useful message if unavailable."""
     spec = REAL_MODELS[name]
-    if not os.environ.get(spec["env"]):
+    key = os.environ.get(spec["env"])
+    if not key:
         raise RuntimeError(
             f"{name}: environment variable {spec['env']} is not set."
+        )
+    # A pasted key with stray whitespace makes the HTTP header invalid, which
+    # SDKs report as a "connection error" rather than a bad key.
+    if key != key.strip() or any(c.isspace() for c in key):
+        raise RuntimeError(
+            f"{name}: {spec['env']} contains whitespace (often a trailing space "
+            f"or line break from copying). Set it again without it."
         )
     try:
         mod = __import__(spec["module"], fromlist=[spec["cls"]])
