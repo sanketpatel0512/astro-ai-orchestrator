@@ -18,11 +18,14 @@ from typing import Any, Callable
 # Kept lazy: importing a provider package you have not installed should not
 # break a mock-only run.
 
+# Every provider gets a 120 s request timeout. Without one, a request the
+# server never answers blocks the whole run indefinitely; with one, it fails
+# as a timeout and the harness retries it like any other transient error.
 REAL_MODELS: dict[str, dict[str, Any]] = {
     "gemini": {
         "module": "langchain_google_genai",
         "cls": "ChatGoogleGenerativeAI",
-        "kwargs": {"model": "gemini-3.8-flash", "temperature": 0},
+        "kwargs": {"model": "gemini-3.8-flash", "temperature": 0, "timeout": 120},
         "env": "GOOGLE_API_KEY",
     },
     "claude": {
@@ -30,19 +33,19 @@ REAL_MODELS: dict[str, dict[str, Any]] = {
         "cls": "ChatAnthropic",
         # Claude 5 models reject non-default temperature, so this runs at the
         # provider default; trials capture the resulting variance.
-        "kwargs": {"model": "claude-sonnet-5-5"},
+        "kwargs": {"model": "claude-sonnet-5-5", "default_request_timeout": 120},
         "env": "ANTHROPIC_API_KEY",
     },
     "openai": {
         "module": "langchain_openai",
         "cls": "ChatOpenAI",
-        "kwargs": {"model": "gpt-4.1", "temperature": 0},
+        "kwargs": {"model": "gpt-4.1", "temperature": 0, "timeout": 120},
         "env": "OPENAI_API_KEY",
     },
     "groq": {
         "module": "langchain_groq",
         "cls": "ChatGroq",
-        "kwargs": {"model": "llama-3.3-70b-versatile", "temperature": 0},
+        "kwargs": {"model": "llama-3.3-70b-versatile", "temperature": 0, "timeout": 120},
         "env": "GROQ_API_KEY",
     },
 }
@@ -158,7 +161,16 @@ def degrading(task: dict) -> list[MockCall]:
 def spurious(task: dict) -> list[MockCall]:
     """Complete, but calls an unnecessary tool as well."""
     calls = [MockCall(t, _args_for(t, task)) for t in _ordered(task)]
-    extra = "get_moon_phase" if "get_moon_phase" not in task["required_tools"] else "get_field_of_view"
+    # Pick a tool the task neither needs nor accepts, preferring one that is not
+    # forbidden so the spurious call is the only fault where that is possible.
+    allowed = set(task["required_tools"]) | set(task.get("acceptable_tools") or [])
+    forbidden = set(task.get("forbidden_tools") or [])
+    candidates = [t for t in ("get_field_of_view", "get_moon_phase", "get_darkness_window",
+                              "get_weather_conditions", "get_target_transit",
+                              "save_session_plan") if t not in allowed]
+    if not candidates:  # every tool is required or acceptable: nothing is spurious
+        return calls
+    extra = sorted(candidates, key=lambda t: t in forbidden)[0]
     calls.insert(1, MockCall(extra, _args_for(extra, task)))
     return calls
 

@@ -12,7 +12,9 @@ free, fast, and remove third-party flakiness as a confound.
 
 from __future__ import annotations
 
+import math
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +23,13 @@ from langchain_core.tools import StructuredTool
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import astro_tools as real  # noqa: E402
 
-# Deterministic fixture data. Values are plausible but fixed.
+# Bump when fixture outputs change. The harness records it on every run and the
+# scorer warns when one result mixes runs made against different fixtures.
+FIXTURE_VERSION = 2
+
+# Deterministic fixture data. Weather is fixed; target positions and the
+# darkness window are computed (see _altitude and _sun_altitude) so that a
+# model checking them against what it knows of the sky finds them plausible.
 CITIES = {
     "austin": {"lat": 30.267, "lon": -97.743, "tz": "America/Chicago"},
     "princeton": {"lat": 40.357, "lon": -74.667, "tz": "America/New_York"},
@@ -32,11 +40,11 @@ CITIES = {
 
 # Common names plus the catalog designations a model is likely to use instead.
 _OBJECTS = {
-    ("orion nebula", "m42", "ngc 1976"): {"dec": -5.39, "mag": 4.0},
-    ("andromeda galaxy", "andromeda", "m31", "ngc 224"): {"dec": 41.27, "mag": 3.4},
-    ("ring nebula", "m57", "ngc 6720"): {"dec": 33.03, "mag": 8.8},
-    ("whirlpool galaxy", "whirlpool", "m51", "ngc 5194"): {"dec": 47.20, "mag": 8.4},
-    ("pleiades", "m45", "seven sisters"): {"dec": 24.12, "mag": 1.6},
+    ("orion nebula", "m42", "ngc 1976"): {"ra": 5.588, "dec": -5.39, "mag": 4.0},
+    ("andromeda galaxy", "andromeda", "m31", "ngc 224"): {"ra": 0.712, "dec": 41.27, "mag": 3.4},
+    ("ring nebula", "m57", "ngc 6720"): {"ra": 18.893, "dec": 33.03, "mag": 8.8},
+    ("whirlpool galaxy", "whirlpool", "m51", "ngc 5194"): {"ra": 13.498, "dec": 47.20, "mag": 8.4},
+    ("pleiades", "m45", "seven sisters"): {"ra": 3.790, "dec": 24.12, "mag": 1.6},
 }
 
 _CALL_LOG: list[dict[str, Any]] = []
@@ -72,6 +80,45 @@ def _object(name: str) -> dict[str, Any] | None:
     return None
 
 
+# --- low-precision astronomy (good to about a degree / a few minutes) -------
+# The same sampling as the real tools in astro_tools.py, with astropy swapped
+# for textbook formulae so fixtures stay offline and deterministic.
+
+
+def _night_start(date: str | None, lon: float) -> datetime:
+    """About 18:00 local solar time on `date`, in UTC (as astro_tools does)."""
+    day = datetime.strptime(date or "2026-01-01", "%Y-%m-%d")
+    return day + timedelta(hours=18 - lon / 15.0)
+
+
+def _days_since_j2000(t: datetime) -> float:
+    return (t - datetime(2000, 1, 1, 12)).total_seconds() / 86400.0
+
+
+def _altitude(ra_h: float, dec: float, lat: float, lon: float, t: datetime) -> float:
+    gmst = (18.697374558 + 24.06570982441908 * _days_since_j2000(t)) % 24
+    hour_angle = math.radians(((gmst + lon / 15.0 - ra_h) % 24) * 15)
+    phi, delta = math.radians(lat), math.radians(dec)
+    return math.degrees(math.asin(math.sin(phi) * math.sin(delta)
+                                  + math.cos(phi) * math.cos(delta) * math.cos(hour_angle)))
+
+
+def _sun_ra_dec(t: datetime) -> tuple[float, float]:
+    d = _days_since_j2000(t)
+    g = math.radians((357.529 + 0.98560028 * d) % 360)
+    q = (280.459 + 0.98564736 * d) % 360
+    ecl_lon = math.radians(q + 1.915 * math.sin(g) + 0.020 * math.sin(2 * g))
+    eps = math.radians(23.439 - 0.00000036 * d)
+    ra = math.degrees(math.atan2(math.cos(eps) * math.sin(ecl_lon), math.cos(ecl_lon))) % 360
+    dec = math.degrees(math.asin(math.sin(eps) * math.sin(ecl_lon)))
+    return ra / 15.0, dec
+
+
+def _sun_altitude(lat: float, lon: float, t: datetime) -> float:
+    ra, dec = _sun_ra_dec(t)
+    return _altitude(ra, dec, lat, lon, t)
+
+
 def geocode_location(location: str) -> str:
     record("geocode_location", {"location": location})
     hit = city(location)
@@ -94,10 +141,16 @@ def get_target_transit(target_name: str, lat: float, lon: float, date: str | Non
     obj = _object(target_name)
     if not obj:
         return f"Error resolving target '{target_name}'. Ensure it is a valid catalog name."
-    peak = round(90 - abs(lat - obj["dec"]), 1)
-    return (f"Target: {target_name}\nPeak Altitude: {peak} degrees\n"
-            f"Transit Time (UTC): 07:40\nTarget is above 30 degrees for: "
-            f"{6 if peak > 45 else 3} of the next 12 hours.")
+    # As astro_tools does: hourly samples from ~18:00 local, peak = highest sample.
+    start = _night_start(date, lon)
+    times = [start + timedelta(hours=h) for h in range(12)]
+    alts = [_altitude(obj["ra"], obj["dec"], lat, lon, t) for t in times]
+    peak = max(range(12), key=alts.__getitem__)
+    return (f"Target: {target_name}\n"
+            f"Observatory Location: Lat {lat}, Lon {lon}\n"
+            f"Peak Altitude: {alts[peak]:.2f} degrees\n"
+            f"Transit Time (UTC): {times[peak]:%Y-%m-%d %H:%M:%S}\n"
+            f"Target is above 30 degrees for: {sum(a > 30 for a in alts)} of the next 12 hours.")
 
 
 def get_moon_phase(date: str) -> str:
@@ -107,8 +160,16 @@ def get_moon_phase(date: str) -> str:
 
 def get_darkness_window(lat: float, lon: float, date: str) -> str:
     record("get_darkness_window", {"lat": lat, "lon": lon, "date": date})
-    hours = 10.4 if lat < 40 else 8.9
-    return f"Astronomical darkness 01:05 UTC to 11:25 UTC on the night of {date}, {hours} hours."
+    # As astro_tools does: 5-minute samples over 24 h from local solar noon.
+    noon = _night_start(date, lon) - timedelta(hours=6)
+    times = [noon + timedelta(minutes=5 * i) for i in range(24 * 12)]
+    dark = [t for t in times if _sun_altitude(lat, lon, t) < -18]
+    if not dark:
+        return f"No astronomical darkness at Lat {lat}, Lon {lon} on the night of {date}."
+    offset = timedelta(hours=lon / 15.0)
+    fmt = lambda t: f"{t:%Y-%m-%d %H:%M} UTC (~{t + offset:%H:%M} local solar)"
+    return (f"Astronomical darkness {fmt(dark[0])} to {fmt(dark[-1])}, "
+            f"{len(dark) * 5 / 60:.1f} hours.")
 
 
 def get_field_of_view(focal_length_mm: float, sensor: str) -> str:

@@ -13,6 +13,14 @@
 #   required_tools  tools that must appear for the task to be complete
 #   dependencies    tool -> tools that must appear BEFORE it
 #   forbidden_tools tools that indicate the model misread the request
+#   acceptable_tools  tools that are neither required nor penalised. Only set on
+#                   tasks that ask for a plan or a go/no-go judgement, where
+#                   checking another observing condition (weather, altitude,
+#                   moon, darkness) is reasonable diligence rather than a
+#                   misread. Everywhere else an unrequested tool counts as
+#                   spurious.
+#   version         bump when a task's prompt or reference changes; the scorer
+#                   ignores runs recorded against an older version (default 1).
 #   param_checks    substring/number assertions on the arguments actually passed.
 #                   When geocode_location has a location check, the scorer also
 #                   checks every lat/lon argument against that city's coordinates.
@@ -69,6 +77,7 @@
   depth: 3
   prompt: "Can I shoot the Orion Nebula from Austin tonight? Check the cloud cover too."
   required_tools: [geocode_location, get_weather_conditions, get_target_transit]
+  acceptable_tools: [get_moon_phase, get_darkness_window]
   dependencies:
     get_weather_conditions: [geocode_location]
     get_target_transit: [geocode_location]
@@ -126,6 +135,7 @@
   depth: 4
   prompt: "Is the Orion Nebula worth shooting from Austin on 2026-11-03? I need weather, target altitude and moon interference."
   required_tools: [geocode_location, get_weather_conditions, get_target_transit, get_moon_phase]
+  acceptable_tools: [get_darkness_window]
   dependencies:
     get_weather_conditions: [geocode_location]
     get_target_transit: [geocode_location]
@@ -139,6 +149,7 @@
   depth: 4
   prompt: "Should I drive to Flagstaff for the Ring Nebula on 2026-09-28? Check the darkness window, weather and whether the target is high enough."
   required_tools: [geocode_location, get_darkness_window, get_weather_conditions, get_target_transit]
+  acceptable_tools: [get_moon_phase]
   dependencies:
     get_darkness_window: [geocode_location]
     get_weather_conditions: [geocode_location]
@@ -152,6 +163,7 @@
   depth: 4
   prompt: "From Princeton on 2026-10-02, is Andromeda worth imaging at 600mm on APS-C given the moon?"
   required_tools: [geocode_location, get_target_transit, get_field_of_view, get_moon_phase]
+  acceptable_tools: [get_weather_conditions, get_darkness_window]
   dependencies: {get_target_transit: [geocode_location]}
   forbidden_tools: []
   param_checks:
@@ -175,6 +187,7 @@
   depth: 4
   prompt: "I want to image the Pleiades from Seattle on 2026-11-19. Check the weather and how high they get, then save me a session plan."
   required_tools: [geocode_location, get_weather_conditions, get_target_transit, save_session_plan]
+  acceptable_tools: [get_moon_phase, get_darkness_window]
   dependencies:
     get_weather_conditions: [geocode_location]
     get_target_transit: [geocode_location]
@@ -188,6 +201,7 @@
   depth: 5
   prompt: "Full assessment for the Orion Nebula from Flagstaff on 2026-10-30: darkness window, weather, altitude, and then a session plan."
   required_tools: [geocode_location, get_darkness_window, get_weather_conditions, get_target_transit, save_session_plan]
+  acceptable_tools: [get_moon_phase]
   dependencies:
     get_darkness_window: [geocode_location]
     get_weather_conditions: [geocode_location]
@@ -202,6 +216,7 @@
   depth: 5
   prompt: "Austin, 2026-09-15, Andromeda at 400mm APS-C. Weather, altitude, moon, framing — then tell me whether to bother."
   required_tools: [geocode_location, get_weather_conditions, get_target_transit, get_moon_phase, get_field_of_view]
+  acceptable_tools: [get_darkness_window]
   dependencies:
     get_weather_conditions: [geocode_location]
     get_target_transit: [geocode_location]
@@ -215,6 +230,7 @@
   depth: 5
   prompt: "Princeton on 2026-11-08 for the Ring Nebula. I need the darkness window, moon and weather checked, then a plan."
   required_tools: [geocode_location, get_darkness_window, get_moon_phase, get_weather_conditions, save_session_plan]
+  acceptable_tools: [get_target_transit]
   dependencies:
     get_darkness_window: [geocode_location]
     get_weather_conditions: [geocode_location]
@@ -238,8 +254,10 @@
 
 - id: T20
   depth: 5
-  prompt: "Seattle, Pleiades, 2026-12-05. Darkness window, weather, altitude — then a plan if it's viable."
+  version: 2
+  prompt: "Seattle, Pleiades, 2026-12-05. Darkness window, weather, altitude — then save a session plan."
   required_tools: [geocode_location, get_darkness_window, get_weather_conditions, get_target_transit, save_session_plan]
+  acceptable_tools: [get_moon_phase]
   dependencies:
     get_darkness_window: [geocode_location]
     get_weather_conditions: [geocode_location]
@@ -268,6 +286,7 @@
   depth: 6
   prompt: "Everything for Andromeda from Flagstaff on 2026-09-09, 400mm APS-C: darkness window, cloud, altitude, field of view, and a final plan."
   required_tools: [geocode_location, get_darkness_window, get_weather_conditions, get_target_transit, get_field_of_view, save_session_plan]
+  acceptable_tools: [get_moon_phase]
   dependencies:
     get_darkness_window: [geocode_location]
     get_weather_conditions: [geocode_location]
@@ -280,7 +299,8 @@
 
 - id: T23
   depth: 6
-  prompt: "Austin, 2026-12-18, Ring Nebula. Check the darkness window, weather, altitude and moon, then plan the session."
+  version: 2
+  prompt: "Austin, 2026-12-18, Andromeda Galaxy. Check the darkness window, weather, altitude and moon, then plan the session."
   required_tools: [geocode_location, get_darkness_window, get_weather_conditions, get_target_transit, get_moon_phase, save_session_plan]
   dependencies:
     get_darkness_window: [geocode_location]
@@ -296,6 +316,7 @@
   depth: 6
   prompt: "Princeton, Pleiades, 2026-10-07, 400mm on APS-C. I want weather, altitude, moon phase and framing checked before you give me a plan."
   required_tools: [geocode_location, get_weather_conditions, get_target_transit, get_moon_phase, get_field_of_view, save_session_plan]
+  acceptable_tools: [get_darkness_window]
   dependencies:
     get_weather_conditions: [geocode_location]
     get_target_transit: [geocode_location]

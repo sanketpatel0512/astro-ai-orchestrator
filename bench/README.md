@@ -28,7 +28,8 @@ nothing for the model to route.
 | metric | definition |
 |---|---|
 | `coverage` | fraction of required tools actually called |
-| `precision` | fraction of distinct calls that were required — spurious calls cost you here |
+| `precision` | fraction of distinct calls that were required — spurious calls cost you here. A task's `acceptable_tools` count on neither side |
+| `acceptable_extra` | the run made at least one acceptable but unrequired call (reported, not penalised) |
 | `order_valid` | every dependency satisfied before the tool that needed it |
 | `params_valid` | fraction of argument assertions that passed; a missing argument fails |
 | `redundant_calls` | calls that exactly repeat an earlier one (same tool, same arguments) |
@@ -59,6 +60,18 @@ third-party latency, rate limits and outages as confounds while making runs
 unrepeatable and more expensive. Fixtures make the benchmark free to re-run and
 the results reproducible.
 
+Fixtures still have to be believable, because strong models check them. In the
+first live run Claude noticed a fixed transit time that was astronomically
+impossible for the Ring Nebula in December and refused to save a plan built on
+it. Target altitude and the darkness window are therefore computed from each
+target's RA/Dec and a low-precision sun model, sampled exactly as the real
+tools sample. They agree with astropy to within 0.4° for targets and 0.01° for
+the sun. Weather stays fixed (15% cloud below 40° latitude, 68% above).
+
+`FIXTURE_VERSION` in `tools.py` is recorded on every run. If a result mixes runs
+made against different fixtures, `score.py` warns that the models saw different
+tool outputs.
+
 ## Task suite
 
 24 astrophotography tasks, chain depth 2 to 6 (five per depth, four at depth 6).
@@ -67,11 +80,24 @@ required tools cover, so a model that does what it was asked can score complete.
 Tasks carry `forbidden_tools` where a request plainly does not need a given
 tool, which is how over-calling gets caught.
 
+Tasks that ask for a plan or a go/no-go judgement also list `acceptable_tools`:
+the other observing-condition tools (weather, altitude, moon, darkness) that
+weren't asked for but are reasonable diligence before advising someone. The
+rule came out of the first live run, where Claude and Gemini made the same
+extra checks on the same tasks in every trial. Precision ignores those calls,
+and `acceptable_extra` reports how often they happen. Tasks that only ask for
+data (T01–T05, T07–T10, T14, T19) have none, so any extra call there is still
+spurious.
+
+A task's `version` is bumped when its prompt or reference changes, and
+`score.py` skips runs recorded against an older version, so a fixed task can be
+rerun on its own without re-paying for the rest.
+
 `harness.py` validates the suite before running and aborts on: unknown tools,
 depth that disagrees with the required list, dependencies or argument checks
 pointing at non-required tools, argument checks naming an argument the tool
-doesn't have, a geocode check on a city with no fixture, and required/forbidden
-overlap.
+doesn't have, a geocode check on a city with no fixture, required/forbidden
+overlap, and acceptable tools that are unknown or overlap required/forbidden.
 
 ## Running it
 
@@ -122,13 +148,14 @@ reproducing it, the scorer is wrong.
 | mock | behaviour | completion | coverage | precision | order valid | redundant | by depth |
 |---|---|---|---|---|---|---|---|
 | `mock_perfect` | correct tools, order and arguments | 100% | 100% | 100% | 100% | 0% | 100% at every depth |
-| `mock_spurious` | complete, plus one extra call | 96% | 100% | 82% | 100% | 21% | d3 dips to 80% |
+| `mock_spurious` | complete, plus one extra call | 96% | 100% | 79% | 100% | 0% | d5 dips to 80% |
 | `mock_degrading` | correct for three steps, then stops | 42% | 78% | 100% | 100% | 0% | 100% at d2–d3, 0% at d4+ |
 | `mock_order` | all required tools, order reversed | 4% | 100% | 100% | 4% | 0% | 20% at d2, 0% beyond |
 
-- `mock_spurious` loses 4% because on T09 its extra `get_moon_phase` is
-  forbidden. On the five tasks that already require both moon and field of view,
-  its extra call is a repeat of `get_field_of_view` and shows up as redundant.
+- `mock_spurious` adds a tool the task neither requires nor accepts, avoiding
+  forbidden ones where it can. On T17 the only such tool is the forbidden
+  `save_session_plan`, which costs it 4% completion. On T22 and T24 every tool is
+  required or acceptable, so it adds nothing there.
 - `mock_order` keeps 20% at depth 2 because T04 has no dependencies, so any
   order is valid.
 - `mock_degrading` has `median_first_error_step: None`: it never makes a wrong

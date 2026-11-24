@@ -39,7 +39,7 @@ RETRY_WAITS_S = (5, 15, 45)
 TRANSIENT = re.compile(
     r"Connection|Timeout|RateLimit|Overloaded|InternalServer|ServiceUnavailable|"
     r"ResourceExhausted|ServerError|\b(429|500|502|503|504|529)\b|UNAVAILABLE|"
-    r"RESOURCE_EXHAUSTED|high demand|try again later",
+    r"RESOURCE_EXHAUSTED|DeadlineExceeded|Deadline Exceeded|high demand|try again later",
     re.IGNORECASE,
 )
 
@@ -110,6 +110,14 @@ def validate_tasks(tasks: list[dict]) -> list[str]:
         location = ((task.get("param_checks") or {}).get("geocode_location") or {}).get("location")
         if location and not toolmod.city(location):
             problems.append(f"{tid}: {location!r} is not a fixture city")
+
+        acceptable = set(task.get("acceptable_tools") or [])
+        if acceptable - known:
+            problems.append(f"{tid}: unknown acceptable tools {sorted(acceptable - known)}")
+        if acceptable & (required | set(task.get("forbidden_tools") or [])):
+            problems.append(f"{tid}: acceptable tools overlap required or forbidden")
+        if not isinstance(task.get("version", 1), int):
+            problems.append(f"{tid}: version must be an integer")
 
         overlap = required & set(task.get("forbidden_tools") or [])
         if overlap:
@@ -260,6 +268,8 @@ def main() -> None:
                             "model": name,
                             "task_id": task["id"],
                             "depth": task["depth"],
+                            "task_version": task.get("version", 1),
+                            "fixture_version": toolmod.FIXTURE_VERSION,
                             "trial": trial,
                             "elapsed_s": round(time.time() - started
                                                - result.get("retry_wait_s", 0), 2),

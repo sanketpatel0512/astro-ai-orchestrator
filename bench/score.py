@@ -7,7 +7,10 @@ Score runs.jsonl against the reference trajectories.
 Definitions, stated plainly because the whole result depends on them:
 
   coverage        fraction of required tools the model actually called
-  precision       fraction of distinct calls that were required (spurious calls hurt)
+  precision       fraction of distinct calls that were required. Tools the task
+                  lists as acceptable_tools are left out of both sides, so
+                  reasonable extra checks neither help nor hurt.
+  acceptable_extra  the run called at least one acceptable (unrequired) tool
   order_valid     every dependency was satisfied before the dependent call
   params_valid    fraction of argument assertions that passed. A missing
                   argument fails its assertion. When the task geocodes a known
@@ -18,6 +21,9 @@ Definitions, stated plainly because the whole result depends on them:
   redundant_calls calls that exactly repeat an earlier call (same tool, same args)
   complete        coverage == 1, order_valid, no forbidden call, and every
                   argument assertion passed
+
+Runs recorded against an older task version are skipped, and a warning is
+printed when the runs being scored were made against different fixtures.
 
   first_error_step  1-indexed position of the first call that was spurious,
                     forbidden, out of order, redundant, or had bad arguments.
@@ -87,6 +93,7 @@ def score_run(run: dict, task: dict) -> dict:
     required = list(task["required_tools"])
     deps = task.get("dependencies") or {}
     forbidden = set(task.get("forbidden_tools") or [])
+    acceptable = set(task.get("acceptable_tools") or [])
     checks = task.get("param_checks") or {}
     coords = expected_coords(task)
 
@@ -96,7 +103,8 @@ def score_run(run: dict, task: dict) -> dict:
 
     covered = called_set & set(required)
     coverage = len(covered) / len(required) if required else 1.0
-    precision = len(covered) / len(called_set) if called_set else 0.0
+    judged = called_set - acceptable
+    precision = len(covered) / len(judged) if judged else 0.0
 
     # order + first error
     seen: set[str] = set()
@@ -113,6 +121,8 @@ def score_run(run: dict, task: dict) -> dict:
 
         if name in forbidden:
             bad = True
+        elif name in acceptable:
+            pass
         elif name not in required:
             bad = True  # spurious
         else:
@@ -151,6 +161,7 @@ def score_run(run: dict, task: dict) -> dict:
         "params_valid": round(params_passed / params_total, 4) if params_total else None,
         "forbidden_hit": bool(called_set & forbidden),
         "redundant_calls": redundant,
+        "acceptable_extra": bool(called_set & acceptable),
         "complete": (coverage == 1.0 and order_valid and params_ok
                      and not (called_set & forbidden)),
         "first_error_step": first_error,
@@ -203,6 +214,8 @@ def aggregate(scored: list[dict]) -> dict:
             "order_valid_rate": round(
                 sum(r["order_valid"] for r in rows) / len(rows), 4),
             "params_valid": round(statistics.mean(params), 4) if params else None,
+            "acceptable_extra_rate": round(
+                sum(r["acceptable_extra"] for r in rows) / len(rows), 4),
             "redundant_rate": round(
                 sum(r["redundant_calls"] > 0 for r in rows) / len(rows), 4),
             "step_cap_rate": round(
@@ -247,10 +260,24 @@ def main() -> None:
                     runs.append(json.loads(line))
     print("scoring " + ", ".join(str(p) for p in paths))
 
+    current = [r for r in runs
+               if r.get("task_version", 1) == tasks[r["task_id"]].get("version", 1)]
+    stale = len(runs) - len(current)
+    if stale:
+        stale_ids = sorted({r["task_id"] for r in runs if r not in current})
+        print(f"skipped {stale} runs recorded against an older version of "
+              f"{', '.join(stale_ids)}")
+    runs = current
+    fixtures = sorted({r.get("fixture_version", 1) for r in runs})
+    if len(fixtures) > 1:
+        print(f"WARNING: these runs mix fixture versions {fixtures}; models saw "
+              f"different tool outputs. Rerun everything for comparable results.")
+
     scored = [score_run(r, tasks[r["task_id"]]) for r in runs]
     summary = aggregate(scored)
 
-    out = {"per_run": scored, "summary": summary}
+    out = {"per_run": scored, "summary": summary, "fixture_versions": fixtures,
+           "skipped_stale_runs": stale}
     with open(HERE / "results.json", "w", encoding="utf-8") as fh:
         json.dump(out, fh, indent=2)
 
@@ -265,6 +292,7 @@ def main() -> None:
         print(f"  params valid     {s['params_valid']:.0%}" if s["params_valid"] is not None
               else "  params valid     n/a")
         print(f"  redundant        {s['redundant_rate']:.0%}")
+        print(f"  acceptable extra {s['acceptable_extra_rate']:.0%}  (runs with an unrequired but reasonable check)")
         print(f"  median 1st error step  {s['median_first_error_step']}")
         print("  by depth         " + "  ".join(
             f"d{d}:{v['completion']:.0%}" for d, v in s["by_depth"].items()))
